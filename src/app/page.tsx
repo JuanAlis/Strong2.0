@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, ChevronRight, Dumbbell } from "lucide-react";
 import { listRoutines, type Routine } from "@/lib/db";
 import { getExercise } from "@/data/exercises";
+import BottomNav from "@/components/BottomNav";
 
 export default function Home() {
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -43,7 +44,7 @@ export default function Home() {
         <span className="text-[11px] text-neutral-400 tabular-nums">{routines.length}</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto scroll-area px-7 pb-8">
+      <div className="flex-1 overflow-y-auto scroll-area px-7 pb-28">
         {loading ? (
           <p className="text-[13px] text-neutral-400 text-center mt-12">Cargando…</p>
         ) : routines.length === 0 ? (
@@ -64,13 +65,17 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      <BottomNav />
     </div>
   );
 }
 
 function RoutineCard({ routine }: { routine: Routine }) {
   const totalSets = routine.exercises.reduce((acc, e) => acc + e.sets.length, 0);
-  const groups = Array.from(new Set(routine.exercises.map((e) => getExercise(e.exercise_id)?.group).filter(Boolean)));
+  const groups = Array.from(
+    new Set(routine.exercises.map((e) => getExercise(e.exercise_id)?.group).filter(Boolean))
+  );
 
   return (
     <Link
