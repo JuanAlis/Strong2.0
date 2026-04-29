@@ -38,6 +38,8 @@ export const EXERCISES: Exercise[] = [
   { id: "cc", name: "Cable Crossover", group: "Pecho", equipment: "Polea", primary: ["chest"], secondary: ["frontDelt"] },
   { id: "pec", name: "Pec Deck", group: "Pecho", equipment: "Máquina", primary: ["chest"], secondary: [] },
   { id: "dip", name: "Fondos en paralelas", group: "Pecho", equipment: "Peso corporal", primary: ["chest", "triceps"], secondary: ["frontDelt"] },
+  { id: "pec_fly", name: "Pec Fly", group: "Pecho", equipment: "Máquina", primary: ["chest"], secondary: [] },
+
 
   // ESPALDA
   { id: "dl", name: "Peso muerto", group: "Espalda", equipment: "Barra", primary: ["lowerBack", "hamstrings", "glutes"], secondary: ["traps", "back"] },
