@@ -219,16 +219,18 @@ function AjustesCard({ user }: { user: User }) {
             }}
           />
         </div>
+        {typeof navigator !== "undefined" && "vibrate" in navigator && (
         <div className="flex items-center justify-between py-1">
-          <span className="text-[13px] text-neutral-700">Vibración al terminar descanso</span>
-          <Toggle
-            enabled={vibration}
-            onChange={(v) => {
-              setVibration(v);
-              save(sound, v);
-            }}
-          />
-        </div>
+        <span className="text-[13px] text-neutral-700">Vibración al terminar descanso (Android)</span>
+        <Toggle
+          enabled={vibration}
+          onChange={(v) => {
+            setVibration(v);
+            save(sound, v);
+          }}
+        />
+      </div>
+      )}
       </div>
     </section>
   );

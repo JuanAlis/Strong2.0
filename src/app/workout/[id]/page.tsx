@@ -20,9 +20,25 @@ import {
 import { supabase } from "@/lib/supabase";
 
 // ---- Audio / haptic ----
+let bellAudio: HTMLAudioElement | null = null;
+
+function unlockBell() {
+  if (!bellAudio) {
+    bellAudio = new Audio("/bell.mp3");
+    bellAudio.volume = 1;
+    bellAudio.play().then(() => {
+      bellAudio!.pause();
+      bellAudio!.currentTime = 0;
+    }).catch(() => {});
+  }
+}
+
 function playBell(sound: boolean, vibrate: boolean) {
-  if (sound) {
-    try { new Audio("/bell.mp3").play(); } catch {}
+  if (sound && bellAudio) {
+    try {
+      bellAudio.currentTime = 0;
+      bellAudio.play();
+    } catch {}
   }
   if (vibrate) {
     try { navigator.vibrate([200, 100, 200]); } catch {}
@@ -255,6 +271,7 @@ export default function WorkoutPage() {
   // Toggle set done — superset-aware rest timer start
   const handleToggleSet = useCallback(
     (exIdx: number, setIdx: number) => {
+      unlockBell();
       if (!liveWorkout) return;
 
       const exs = liveWorkout.exercises.map((ex, i) =>
