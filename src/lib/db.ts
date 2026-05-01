@@ -1,18 +1,22 @@
 import { supabase } from "./supabase";
 
 // ---------- TYPES ----------
+export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
+
 export interface RoutineSet {
   id?: string;
   position: number;
   weight: number | null;
   reps: number | null;
   rest_seconds: number;
+  set_type?: SetType;
 }
 export interface RoutineExercise {
   id?: string;
   exercise_id: string;
   position: number;
   notes?: string | null;
+  superset_group?: number | null;
   sets: RoutineSet[];
 }
 export interface Routine {
@@ -20,6 +24,33 @@ export interface Routine {
   name: string;
   exercises: RoutineExercise[];
   created_at?: string;
+}
+
+// ---------- LIVE WORKOUT TYPES ----------
+export interface LiveSet {
+  position: number;
+  weight: number | null;
+  reps: number | null;
+  rest_seconds: number;
+  set_type: SetType;
+  done: boolean;
+  actual_weight: number | null;
+  actual_reps: number | null;
+}
+
+export interface LiveExercise {
+  exercise_id: string;
+  position: number;
+  notes: string | null;
+  superset_group: number | null;
+  sets: LiveSet[];
+}
+
+export interface LiveWorkout {
+  routine_id: string;
+  routine_name: string;
+  started_at: number;
+  exercises: LiveExercise[];
 }
 
 export interface WorkoutSummary {
@@ -43,6 +74,7 @@ export interface WorkoutSetRow {
   weight: number | null;
   reps: number | null;
   done: boolean;
+  set_type?: SetType;
 }
 
 export interface BodyWeightEntry {
@@ -71,6 +103,8 @@ export interface UserProfile {
   height_cm: number | null;
   birth_date: string | null;
   goal: GoalType | null;
+  sound_enabled?: boolean | null;
+  vibration_enabled?: boolean | null;
 }
 
 // ---------- HELPERS ----------
@@ -82,7 +116,7 @@ async function currentUserId(): Promise<string> {
 
 // ---------- ROUTINES ----------
 const ROUTINE_SELECT =
-  "id, name, created_at, routine_exercises(id, exercise_id, position, notes, routine_sets(id, position, weight, reps, rest_seconds))";
+  "id, name, created_at, routine_exercises(id, exercise_id, position, notes, superset_group, routine_sets(id, position, weight, reps, rest_seconds, set_type))";
 
 function mapRoutine(r: any): Routine {
   return {
@@ -96,6 +130,7 @@ function mapRoutine(r: any): Routine {
         exercise_id: e.exercise_id,
         position: e.position,
         notes: e.notes ?? null,
+        superset_group: e.superset_group ?? null,
         sets: (e.routine_sets || [])
           .sort((a: any, b: any) => a.position - b.position)
           .map((s: any) => ({
@@ -104,6 +139,7 @@ function mapRoutine(r: any): Routine {
             weight: s.weight,
             reps: s.reps,
             rest_seconds: s.rest_seconds,
+            set_type: (s.set_type as SetType) ?? 'normal',
           })),
       })),
   };
@@ -162,6 +198,7 @@ export async function saveRoutine(routine: {
         exercise_id: ex.exercise_id,
         position: i,
         notes: ex.notes || null,
+        superset_group: ex.superset_group ?? null,
       })
       .select("id")
       .single();
@@ -180,6 +217,7 @@ export async function saveRoutine(routine: {
             ? null
             : Number(s.reps),
         rest_seconds: Number(s.rest_seconds) || 90,
+        set_type: s.set_type ?? 'normal',
       }));
       const { error: setErr } = await supabase.from("routine_sets").insert(setsToInsert);
       if (setErr) throw setErr;
@@ -227,6 +265,7 @@ export async function saveWorkoutSet(payload: {
   weight: number | null;
   reps: number | null;
   done: boolean;
+  setType?: SetType;
 }) {
   const { error } = await supabase.from("workout_sets").insert({
     workout_id: payload.workoutId,
@@ -236,6 +275,7 @@ export async function saveWorkoutSet(payload: {
     weight: payload.weight,
     reps: payload.reps,
     done: payload.done,
+    set_type: payload.setType ?? 'normal',
   });
   if (error) throw error;
 }
@@ -282,7 +322,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetail
       .single(),
     supabase
       .from("workout_sets")
-      .select("id, exercise_id, position, set_position, weight, reps, done")
+      .select("id, exercise_id, position, set_position, weight, reps, done, set_type")
       .eq("workout_id", workoutId)
       .order("position")
       .order("set_position"),
@@ -307,6 +347,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetail
       weight: s.weight,
       reps: s.reps,
       done: s.done,
+      set_type: (s.set_type as SetType) ?? 'normal',
     })),
   };
 }
@@ -366,7 +407,7 @@ export async function addBodyMeasurement(
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from("user_profile")
-    .select("sex, height_cm, birth_date, goal")
+    .select("sex, height_cm, birth_date, goal, sound_enabled, vibration_enabled")
     .eq("user_id", userId)
     .single();
   if (error) return null;
@@ -375,6 +416,8 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     height_cm: data.height_cm ?? null,
     birth_date: data.birth_date ?? null,
     goal: (data.goal as GoalType) ?? null,
+    sound_enabled: data.sound_enabled ?? true,
+    vibration_enabled: data.vibration_enabled ?? true,
   };
 }
 
@@ -385,7 +428,24 @@ export async function upsertUserProfile(userId: string, profile: UserProfile): P
     height_cm: profile.height_cm,
     birth_date: profile.birth_date,
     goal: profile.goal,
+    sound_enabled: profile.sound_enabled ?? true,
+    vibration_enabled: profile.vibration_enabled ?? true,
     updated_at: new Date().toISOString(),
   });
   if (error) throw error;
 }
+
+
+// ---------- DELETE WEIGH DATA ----------
+export async function deleteBodyWeight(id: string) {
+  const { error } = await supabase.from("body_weight").delete().eq("id", id);
+  if (error) throw error;
+}
+
+
+// ---------- DELETE MEDIDAS DATA ----------
+export async function deleteBodyMeasurement(id: string) {
+  const { error } = await supabase.from("body_measurements").delete().eq("id", id);
+  if (error) throw error;
+}
+

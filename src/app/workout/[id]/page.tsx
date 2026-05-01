@@ -2,155 +2,289 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Check, X } from "lucide-react";
-import AnatomyModel from "@/components/AnatomyModel";
+import { X } from "lucide-react";
+import RoutineEditor from "@/components/RoutineEditor";
 import {
   getRoutine,
   startWorkout,
   finishWorkout,
   saveWorkoutSet,
+  saveRoutine,
   getLastPerformance,
+  getUserProfile,
   type Routine,
+  type LiveExercise,
+  type LiveWorkout,
+  type RoutineExercise,
 } from "@/lib/db";
-import { getExercise } from "@/data/exercises";
+import { supabase } from "@/lib/supabase";
 
-interface LiveSet {
-  position: number;
-  targetWeight: number | null;
-  targetReps: number | null;
-  rest: number;
-  actualWeight: string;
-  actualReps: string;
-  done: boolean;
-}
-interface LiveExercise {
-  exerciseId: string;
-  position: number;
-  notes: string | null;
-  sets: LiveSet[];
-}
-
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.15);
-  } catch {
-    // AudioContext not available
+// ---- Audio / haptic ----
+function playBell(sound: boolean, vibrate: boolean) {
+  if (sound) {
+    try { new Audio("/bell.mp3").play(); } catch {}
+  }
+  if (vibrate) {
+    try { navigator.vibrate([200, 100, 200]); } catch {}
   }
 }
 
+// ---- Helpers ----
+function formatTime(s: number) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function liveToRoutineExercises(exs: LiveExercise[]): RoutineExercise[] {
+  return exs.map((ex, i) => ({
+    exercise_id: ex.exercise_id,
+    position: i,
+    notes: ex.notes,
+    superset_group: ex.superset_group,
+    sets: ex.sets.map((s, j) => ({
+      position: j,
+      weight: s.weight,
+      reps: s.reps,
+      rest_seconds: s.rest_seconds,
+      set_type: s.set_type,
+    })),
+  }));
+}
+
+function hasStructuralDiff(live: LiveWorkout, snap: Routine): boolean {
+  const le = live.exercises;
+  const se = snap.exercises;
+  if (le.length !== se.length) return true;
+  for (let i = 0; i < le.length; i++) {
+    if (le[i].exercise_id !== se[i].exercise_id) return true;
+    if ((le[i].notes ?? null) !== (se[i].notes ?? null)) return true;
+    if ((le[i].superset_group ?? null) !== (se[i].superset_group ?? null)) return true;
+    if (le[i].sets.length !== se[i].sets.length) return true;
+    for (let j = 0; j < le[i].sets.length; j++) {
+      const ls = le[i].sets[j];
+      const ss = se[i].sets[j];
+      if (ls.rest_seconds !== ss.rest_seconds) return true;
+      if (ls.set_type !== (ss.set_type ?? "normal")) return true;
+    }
+  }
+  return false;
+}
+
+// ---- Rest timer state ----
+interface RestTimer {
+  remaining: number;
+  total: number;
+  editing: boolean;
+  editVal: string;
+}
+
+// ---- Finish diff modal ----
+function FinishModal({
+  onHistoryOnly,
+  onUpdateTemplate,
+  onSaveAsNew,
+  onCancel,
+  saving,
+}: {
+  onHistoryOnly: () => void;
+  onUpdateTemplate: () => void;
+  onSaveAsNew: (name: string) => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const [newName, setNewName] = useState("");
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={onCancel} />
+      <div
+        className="fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-3xl px-6 pt-5 anim-slide-up"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 24px)" }}
+      >
+        <div className="w-10 h-1 bg-neutral-200 rounded-full mx-auto mb-5" />
+        <h2 className="font-display text-[22px] font-light mb-1">Cambios detectados</h2>
+        <p className="text-[12px] text-neutral-500 mb-5">
+          Modificaste ejercicios, series o parámetros respecto a la plantilla.
+        </p>
+
+        {/* Option A */}
+        <button
+          onClick={onHistoryOnly}
+          disabled={saving}
+          className="w-full text-left px-4 py-3.5 bg-neutral-50 rounded-2xl mb-2 active:bg-neutral-100 disabled:opacity-40 transition"
+        >
+          <p className="text-[14px] font-medium text-black">Solo guardar en historial</p>
+          <p className="text-[12px] text-neutral-500 mt-0.5">La plantilla no se modifica</p>
+        </button>
+
+        {/* Option B */}
+        <button
+          onClick={onUpdateTemplate}
+          disabled={saving}
+          className="w-full text-left px-4 py-3.5 bg-neutral-50 rounded-2xl mb-2 active:bg-neutral-100 disabled:opacity-40 transition"
+        >
+          <p className="text-[14px] font-medium text-black">Actualizar plantilla y guardar</p>
+          <p className="text-[12px] text-neutral-500 mt-0.5">La rutina existente se actualiza</p>
+        </button>
+
+        {/* Option C */}
+        <div className="bg-neutral-50 rounded-2xl px-4 py-3.5 mb-4">
+          <p className="text-[14px] font-medium text-black mb-2.5">Guardar como nueva rutina</p>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Nombre de la nueva rutina"
+            className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-neutral-400 transition placeholder:text-neutral-300 mb-2.5"
+          />
+          <button
+            onClick={() => newName.trim() && onSaveAsNew(newName.trim())}
+            disabled={!newName.trim() || saving}
+            className="w-full bg-black text-white rounded-xl py-2.5 text-[13px] font-medium disabled:opacity-30 active:scale-[0.99] transition"
+          >
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="w-full text-[13px] text-neutral-400 py-2"
+        >
+          Cancelar
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ---- Page ----
 export default function WorkoutPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
 
-  const [routine, setRoutine] = useState<Routine | null>(null);
-  const [exercises, setExercises] = useState<LiveExercise[]>([]);
-  const [history, setHistory] = useState<Record<string, { weight: number; reps: number }>>({});
+  const [liveWorkout, setLiveWorkout] = useState<LiveWorkout | null>(null);
+  const [templateSnapshot, setTemplateSnapshot] = useState<Routine | null>(null);
   const [workoutId, setWorkoutId] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number>(Date.now());
+  const [startedAt] = useState(() => Date.now());
   const [elapsed, setElapsed] = useState(0);
-  const [restTimer, setRestTimer] = useState<{
-    remaining: number;
-    total: number;
-    editing: boolean;
-    editVal: string;
-  } | null>(null);
+  const [restTimer, setRestTimer] = useState<RestTimer | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [showDiffModal, setShowDiffModal] = useState(false);
   const [finishing, setFinishing] = useState(false);
+
   const initRef = useRef(false);
   const beeped = useRef(false);
 
+  // Init: load routine + prefs, clone to live state, create workout record
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
     (async () => {
-      const r = await getRoutine(id);
-      const hist = await getLastPerformance();
+      const [r, hist, { data: authData }] = await Promise.all([
+        getRoutine(id),
+        getLastPerformance(),
+        supabase.auth.getUser(),
+      ]);
       if (!r) return;
-      setRoutine(r);
-      setHistory(hist);
-      const live: LiveExercise[] = r.exercises.map((e) => ({
-        exerciseId: e.exercise_id,
-        position: e.position,
-        notes: e.notes ?? null,
-        sets: e.sets.map((s) => ({
-          position: s.position,
-          targetWeight: s.weight,
-          targetReps: s.reps,
-          rest: s.rest_seconds || 90,
-          actualWeight: hist[e.exercise_id]?.weight?.toString() ?? s.weight?.toString() ?? "",
-          actualReps: s.reps?.toString() ?? "",
-          done: false,
+
+      if (authData.user) {
+        const prefs = await getUserProfile(authData.user.id);
+        setSoundEnabled(prefs?.sound_enabled ?? true);
+        setVibrationEnabled(prefs?.vibration_enabled ?? true);
+      }
+
+      setTemplateSnapshot(r);
+
+      const live: LiveWorkout = {
+        routine_id: r.id,
+        routine_name: r.name,
+        started_at: Date.now(),
+        exercises: r.exercises.map((e) => ({
+          exercise_id: e.exercise_id,
+          position: e.position,
+          notes: e.notes ?? null,
+          superset_group: e.superset_group ?? null,
+          sets: e.sets.map((s) => ({
+            position: s.position,
+            weight: s.weight,
+            reps: s.reps,
+            rest_seconds: s.rest_seconds || 90,
+            set_type: s.set_type ?? "normal",
+            done: false,
+            actual_weight: hist[e.exercise_id]?.weight ?? null,
+            actual_reps: s.reps,
+          })),
         })),
-      }));
-      setExercises(live);
+      };
+      setLiveWorkout(live);
+
       const wid = await startWorkout(r.id, r.name);
       setWorkoutId(wid);
-      setStartedAt(Date.now());
     })();
   }, [id]);
 
   // Elapsed timer
   useEffect(() => {
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    const t = setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
+      1000
+    );
     return () => clearInterval(t);
   }, [startedAt]);
 
-  // Rest timer countdown
+  // Rest countdown + bell at zero
   useEffect(() => {
     if (!restTimer || restTimer.editing) return;
     if (restTimer.remaining <= 0) {
       if (!beeped.current) {
         beeped.current = true;
-        playBeep();
+        playBell(soundEnabled, vibrationEnabled);
       }
       return;
     }
     beeped.current = false;
     const t = setTimeout(
-      () => setRestTimer((prev) => prev ? { ...prev, remaining: prev.remaining - 1 } : null),
+      () => setRestTimer((prev) => (prev ? { ...prev, remaining: prev.remaining - 1 } : null)),
       1000
     );
     return () => clearTimeout(t);
-  }, [restTimer]);
+  }, [restTimer, soundEnabled, vibrationEnabled]);
 
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  // Toggle set done — superset-aware rest timer start
+  const handleToggleSet = useCallback(
+    (exIdx: number, setIdx: number) => {
+      if (!liveWorkout) return;
 
-  const toggleSet = (exIdx: number, setIdx: number) => {
-    const next = [...exercises];
-    const set = { ...next[exIdx].sets[setIdx] };
-    set.done = !set.done;
-    next[exIdx] = { ...next[exIdx], sets: next[exIdx].sets.map((s, i) => (i === setIdx ? set : s)) };
-    setExercises(next);
-    if (set.done && set.rest > 0) {
-      beeped.current = false;
-      setRestTimer({ remaining: set.rest, total: set.rest, editing: false, editVal: "" });
-    }
-  };
+      const exs = liveWorkout.exercises.map((ex, i) =>
+        i === exIdx
+          ? { ...ex, sets: ex.sets.map((s, j) => (j === setIdx ? { ...s, done: !s.done } : s)) }
+          : ex
+      );
+      const updatedSet = exs[exIdx].sets[setIdx];
+      const updatedEx = exs[exIdx];
+      setLiveWorkout({ ...liveWorkout, exercises: exs });
 
-  const updateActual = (
-    exIdx: number,
-    setIdx: number,
-    field: "actualWeight" | "actualReps",
-    value: string
-  ) => {
-    const next = [...exercises];
-    next[exIdx] = {
-      ...next[exIdx],
-      sets: next[exIdx].sets.map((s, i) => (i === setIdx ? { ...s, [field]: value } : s)),
-    };
-    setExercises(next);
-  };
+      if (updatedSet.done) {
+        const nextEx = exs[exIdx + 1];
+        const inSuperset = updatedEx.superset_group !== null;
+        const sameGroup = inSuperset && nextEx?.superset_group === updatedEx.superset_group;
+        const partnerIncomplete = sameGroup && nextEx.sets.some((s) => !s.done);
+
+        if (!partnerIncomplete && updatedSet.rest_seconds > 0) {
+          beeped.current = false;
+          setRestTimer({
+            remaining: updatedSet.rest_seconds,
+            total: updatedSet.rest_seconds,
+            editing: false,
+            editVal: "",
+          });
+        }
+      }
+    },
+    [liveWorkout]
+  );
 
   const adjustRest = useCallback((delta: number) => {
     setRestTimer((prev) =>
@@ -162,31 +296,49 @@ export default function WorkoutPage() {
     setRestTimer((prev) => {
       if (!prev) return null;
       const n = parseInt(prev.editVal, 10);
-      if (!isNaN(n) && n > 0) {
-        return { ...prev, remaining: n, total: n, editing: false, editVal: "" };
-      }
+      if (!isNaN(n) && n > 0) return { ...prev, remaining: n, total: n, editing: false, editVal: "" };
       return { ...prev, editing: false, editVal: "" };
     });
   };
 
-  const handleFinish = async () => {
-    if (!workoutId) return;
-    setFinishing(true);
-    try {
-      for (const ex of exercises) {
-        for (const s of ex.sets) {
-          await saveWorkoutSet({
-            workoutId,
-            exerciseId: ex.exerciseId,
-            position: ex.position,
-            setPosition: s.position,
-            weight: s.actualWeight === "" ? null : Number(s.actualWeight),
-            reps: s.actualReps === "" ? null : Number(s.actualReps),
-            done: s.done,
-          });
-        }
+  const persistSets = async (wid: string) => {
+    if (!liveWorkout) return;
+    for (const ex of liveWorkout.exercises) {
+      for (const s of ex.sets) {
+        await saveWorkoutSet({
+          workoutId: wid,
+          exerciseId: ex.exercise_id,
+          position: ex.position,
+          setPosition: s.position,
+          weight: s.actual_weight,
+          reps: s.actual_reps,
+          done: s.done,
+          setType: s.set_type,
+        });
       }
-      await finishWorkout(workoutId, elapsed);
+    }
+    await finishWorkout(wid, elapsed);
+  };
+
+  const doSave = async (opts: { updateTemplate?: boolean; newRoutineName?: string }) => {
+    if (!workoutId || !liveWorkout || !templateSnapshot) return;
+    setFinishing(true);
+    setShowDiffModal(false);
+    try {
+      if (opts.updateTemplate) {
+        await saveRoutine({
+          id: templateSnapshot.id,
+          name: templateSnapshot.name,
+          exercises: liveToRoutineExercises(liveWorkout.exercises),
+        });
+      }
+      if (opts.newRoutineName) {
+        await saveRoutine({
+          name: opts.newRoutineName,
+          exercises: liveToRoutineExercises(liveWorkout.exercises),
+        });
+      }
+      await persistSets(workoutId);
       router.push("/");
     } catch (e: any) {
       alert("Error al finalizar: " + e.message);
@@ -194,7 +346,16 @@ export default function WorkoutPage() {
     }
   };
 
-  if (!routine) {
+  const handleFinish = () => {
+    if (!liveWorkout || !templateSnapshot || !workoutId) return;
+    if (hasStructuralDiff(liveWorkout, templateSnapshot)) {
+      setShowDiffModal(true);
+    } else {
+      doSave({});
+    }
+  };
+
+  if (!liveWorkout) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center">
         <p className="text-[13px] text-neutral-400">Iniciando…</p>
@@ -202,118 +363,60 @@ export default function WorkoutPage() {
     );
   }
 
-  const completed = exercises.reduce((acc, e) => acc + e.sets.filter((s) => s.done).length, 0);
-  const total = exercises.reduce((acc, e) => acc + e.sets.length, 0);
+  const completed = liveWorkout.exercises.reduce(
+    (acc, e) => acc + e.sets.filter((s) => s.done).length,
+    0
+  );
+  const total = liveWorkout.exercises.reduce((acc, e) => acc + e.sets.length, 0);
 
   return (
     <div className="min-h-[100dvh] flex flex-col">
       <div className="h-11 flex-shrink-0" />
-      <div className="px-5 pt-2 pb-3 flex items-center justify-between border-b border-neutral-100">
-        <div className="text-[12px] tabular-nums text-neutral-500">
+
+      {/* Header */}
+      <div className="px-5 pt-2 pb-3 flex items-center justify-between border-b border-neutral-100 flex-shrink-0">
+        <div>
           <p className="text-[10px] uppercase tracking-wider text-neutral-400">Tiempo</p>
-          <p className="text-[14px] font-medium text-black">{formatTime(elapsed)}</p>
+          <p className="text-[14px] font-medium text-black tabular-nums">{formatTime(elapsed)}</p>
         </div>
         <div className="text-center">
           <p className="text-[10px] uppercase tracking-wider text-neutral-400">Series</p>
-          <p className="text-[14px] font-medium text-black tabular-nums">{completed}/{total}</p>
+          <p className="text-[14px] font-medium text-black tabular-nums">
+            {completed}/{total}
+          </p>
         </div>
         <button
           onClick={handleFinish}
           disabled={finishing}
-          className="bg-black text-white px-4 py-2 rounded-xl text-[13px] font-medium active:scale-95 disabled:opacity-50"
+          className="bg-black text-white px-4 py-2 rounded-xl text-[13px] font-medium active:scale-95 disabled:opacity-50 transition"
         >
           {finishing ? "…" : "Terminar"}
         </button>
       </div>
 
-      <div className="px-7 pt-4 pb-3">
-        <h1 className="font-display text-[28px] leading-tight font-light">{routine.name}</h1>
+      {/* Routine name */}
+      <div className="px-7 pt-4 pb-2 flex-shrink-0">
+        <h1 className="font-display text-[26px] leading-tight font-light">
+          {liveWorkout.routine_name}
+        </h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto scroll-area px-7 pb-40">
-        {exercises.map((ex, exIdx) => {
-          const meta = getExercise(ex.exerciseId);
-          if (!meta) return null;
-          const last = history[ex.exerciseId];
-          return (
-            <div key={exIdx} className="mb-7">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-12 flex items-center justify-center flex-shrink-0">
-                  <AnatomyModel primary={meta.primary} secondary={meta.secondary} view="front" size={28} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-medium text-black leading-tight">{meta.name}</p>
-                  {last && (
-                    <p className="text-[10px] text-neutral-400 mt-0.5 tabular-nums">
-                      Última: {last.weight} kg × {last.reps}
-                    </p>
-                  )}
-                </div>
-              </div>
+      {/* Live editor fills the remaining space */}
+      <RoutineEditor
+        mode="live"
+        exercises={liveWorkout.exercises}
+        onChange={(exs) =>
+          setLiveWorkout((prev) => (prev ? { ...prev, exercises: exs } : prev))
+        }
+        onToggleSet={handleToggleSet}
+      />
 
-              {ex.notes && (
-                <p className="text-[11px] text-neutral-400 mb-2.5 pl-14 leading-relaxed italic">
-                  {ex.notes}
-                </p>
-              )}
-
-              <div className="grid grid-cols-[28px_1fr_1fr_1fr_36px] gap-2 px-1 mb-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-neutral-400">Set</span>
-                <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-center">Anterior</span>
-                <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-center">kg</span>
-                <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-center">Reps</span>
-                <span />
-              </div>
-
-              {ex.sets.map((set, setIdx) => (
-                <div
-                  key={setIdx}
-                  className={`grid grid-cols-[28px_1fr_1fr_1fr_36px] gap-2 items-center mb-1.5 py-1 rounded-lg transition ${
-                    set.done ? "bg-neutral-100" : ""
-                  }`}
-                >
-                  <span className="text-[12px] tabular-nums text-neutral-500 text-center">{setIdx + 1}</span>
-                  <span className="text-[11px] text-neutral-400 text-center tabular-nums">
-                    {last ? `${last.weight}×${last.reps}` : "—"}
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={set.actualWeight}
-                    onChange={(e) => updateActual(exIdx, setIdx, "actualWeight", e.target.value)}
-                    placeholder={set.targetWeight?.toString() ?? "—"}
-                    className="w-full bg-neutral-100 rounded-lg py-2 text-[13px] text-center tabular-nums text-black outline-none focus:bg-neutral-200/70 transition placeholder:text-neutral-300"
-                  />
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={set.actualReps}
-                    onChange={(e) => updateActual(exIdx, setIdx, "actualReps", e.target.value)}
-                    placeholder={set.targetReps?.toString() ?? "—"}
-                    className="w-full bg-neutral-100 rounded-lg py-2 text-[13px] text-center tabular-nums text-black outline-none focus:bg-neutral-200/70 transition placeholder:text-neutral-300"
-                  />
-                  <button
-                    onClick={() => toggleSet(exIdx, setIdx)}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
-                      set.done ? "bg-black text-white" : "bg-neutral-100 text-neutral-400"
-                    }`}
-                  >
-                    <Check size={15} strokeWidth={2.5} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Rest timer */}
+      {/* Rest timer overlay */}
       {restTimer && (
         <div
-          className="fixed left-0 right-0 anim-slide-up"
+          className="fixed left-0 right-0 anim-slide-up z-30"
           style={{ bottom: "env(safe-area-inset-bottom, 0px)" }}
         >
-          {/* Progress bar */}
           <div className="h-1 bg-neutral-800 overflow-hidden">
             <div
               className="h-full bg-white transition-all duration-1000 ease-linear"
@@ -322,7 +425,6 @@ export default function WorkoutPage() {
               }}
             />
           </div>
-
           <div className="bg-black text-white px-5 py-4 flex items-center justify-between">
             <div>
               <p className="text-[10px] uppercase tracking-wider text-white/60 mb-0.5">Descanso</p>
@@ -333,7 +435,7 @@ export default function WorkoutPage() {
                   inputMode="numeric"
                   value={restTimer.editVal}
                   onChange={(e) =>
-                    setRestTimer((prev) => prev ? { ...prev, editVal: e.target.value } : null)
+                    setRestTimer((prev) => (prev ? { ...prev, editVal: e.target.value } : null))
                   }
                   onBlur={commitRestEdit}
                   onKeyDown={(e) => e.key === "Enter" && commitRestEdit()}
@@ -375,6 +477,17 @@ export default function WorkoutPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Diff modal */}
+      {showDiffModal && (
+        <FinishModal
+          onHistoryOnly={() => doSave({})}
+          onUpdateTemplate={() => doSave({ updateTemplate: true })}
+          onSaveAsNew={(name) => doSave({ newRoutineName: name })}
+          onCancel={() => setShowDiffModal(false)}
+          saving={finishing}
+        />
       )}
     </div>
   );

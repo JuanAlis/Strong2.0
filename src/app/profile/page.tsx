@@ -6,8 +6,10 @@ import type { User } from "@supabase/supabase-js";
 import {
   listBodyWeight,
   addBodyWeight,
+  deleteBodyWeight,
   listBodyMeasurements,
   addBodyMeasurement,
+  deleteBodyMeasurement,
   getUserProfile,
   upsertUserProfile,
   type BodyWeightEntry,
@@ -17,6 +19,7 @@ import {
   type SexType,
 } from "@/lib/db";
 import BottomNav from "@/components/BottomNav";
+import { X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const GOAL_LABELS: Record<GoalType, string> = {
@@ -153,6 +156,84 @@ function PersonalDataCard({ user }: { user: User }) {
   );
 }
 
+// ---------- AJUSTES CARD ----------
+function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${
+        enabled ? "bg-black" : "bg-neutral-200"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+          enabled ? "translate-x-[20px]" : "translate-x-0"
+        }`}
+      />
+    </button>
+  );
+}
+
+function AjustesCard({ user }: { user: User }) {
+  const [sound, setSound] = useState(true);
+  const [vibration, setVibration] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    getUserProfile(user.id).then((p) => {
+      if (p) {
+        setSound(p.sound_enabled ?? true);
+        setVibration(p.vibration_enabled ?? true);
+      }
+      setLoaded(true);
+    });
+  }, [user.id]);
+
+  const save = (sound_enabled: boolean, vibration_enabled: boolean) => {
+    getUserProfile(user.id)
+      .then((p) =>
+        upsertUserProfile(user.id, {
+          ...(p ?? { sex: null, height_cm: null, birth_date: null, goal: null }),
+          sound_enabled,
+          vibration_enabled,
+        })
+      )
+      .catch(() => {});
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <section>
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.15em] text-black mb-4">
+        Ajustes
+      </h2>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between py-1">
+          <span className="text-[13px] text-neutral-700">Sonido al terminar descanso</span>
+          <Toggle
+            enabled={sound}
+            onChange={(v) => {
+              setSound(v);
+              save(v, vibration);
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between py-1">
+          <span className="text-[13px] text-neutral-700">Vibración al terminar descanso</span>
+          <Toggle
+            enabled={vibration}
+            onChange={(v) => {
+              setVibration(v);
+              save(sound, v);
+            }}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---------- BODY WEIGHT SECTION ----------
 function BodyWeightSection({ user }: { user: User }) {
   const [weights, setWeights] = useState<BodyWeightEntry[]>([]);
@@ -176,6 +257,12 @@ function BodyWeightSection({ user }: { user: User }) {
       alert(err.message);
     }
     setSaving(false);
+  };
+
+  const handleDelete = async (id: string) => {
+  if (!confirm("¿Eliminar este registro?")) return;
+  await deleteBodyWeight(id);
+  setWeights(await listBodyWeight(user.id));
   };
 
   const chartData = weights
@@ -239,12 +326,15 @@ function BodyWeightSection({ user }: { user: User }) {
             <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-right">kg</span>
           </div>
           {weights.map((w) => (
-            <div key={w.id} className="grid grid-cols-[1fr_80px] gap-2 py-2 border-b border-neutral-100">
-              <span className="text-[13px] text-neutral-600">
-                {new Date(w.date).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
-              </span>
-              <span className="text-[13px] font-medium text-black text-right tabular-nums">{w.weight_kg} kg</span>
-            </div>
+                <div key={w.id} className="grid grid-cols-[1fr_80px_32px] gap-2 py-2 border-b border-neutral-100 items-center">
+                <span className="text-[13px] text-neutral-600">
+                  {new Date(w.date).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+                <span className="text-[13px] font-medium text-black text-right tabular-nums">{w.weight_kg} kg</span>
+                <button onClick={() => handleDelete(w.id)} className="text-neutral-300 active:text-red-400 transition flex items-center justify-center">
+                  <X size={14} strokeWidth={1.5} />
+                </button>
+              </div>
           ))}
         </div>
       )}
@@ -286,6 +376,14 @@ function MeasurementsSection({ user }: { user: User }) {
     }
     setSaving(false);
   };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Eliminar esta medición?")) return;
+    await deleteBodyMeasurement(id);
+    setMeasurements(await listBodyMeasurements(user.id));
+    };
+
+
 
   const mField = (key: keyof typeof form, label: string) =>
     key === "date" ? null : (
@@ -343,7 +441,9 @@ function MeasurementsSection({ user }: { user: User }) {
               <tr className="border-b border-neutral-200">
                 {["Fecha", "Pecho", "B.D", "B.I", "Cintura", "Cadera", "M.D", "M.I"].map((h) => (
                   <th key={h} className="py-1.5 px-1 text-left font-medium text-neutral-400 uppercase tracking-wider">{h}</th>
+                  
                 ))}
+                <th className="py-1.5 px-1"></th>
               </tr>
             </thead>
             <tbody>
@@ -356,7 +456,12 @@ function MeasurementsSection({ user }: { user: User }) {
                     <td key={i} className="py-2 px-1 tabular-nums text-black text-center">
                       {v != null ? v : <span className="text-neutral-300">—</span>}
                     </td>
-                  ))}
+                  ))} 
+                  <td className="py-2 px-1">
+              <button onClick={() => handleDelete(m.id)} className="text-neutral-300 active:text-red-400 transition">
+                <X size={13} strokeWidth={1.5} />
+              </button>
+            </td>
                 </tr>
               ))}
             </tbody>
@@ -399,6 +504,7 @@ export default function ProfilePage() {
 
       <div className="flex-1 overflow-y-auto scroll-area px-7 pb-28 space-y-8">
         <PersonalDataCard user={user} />
+        <AjustesCard user={user} />
         <BodyWeightSection user={user} />
         <MeasurementsSection user={user} />
 
