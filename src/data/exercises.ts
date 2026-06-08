@@ -57,7 +57,7 @@ export const EXERCISES: Exercise[] = [
   { id: "pullover", name: "Pullover", group: "Espalda", equipment: "Mancuerna", primary: ["lats"], secondary: ["chest"] },
   { id: "rdl", name: "Peso muerto rumano", group: "Espalda", equipment: "Barra", primary: ["hamstrings", "glutes", "lowerBack"], secondary: ["back"] },
   { id: "row_mach_low", name: "Remo en máquina bajo", group: "Espalda", equipment: "Máquina", primary: ["back", "lats"], secondary: ["biceps"] },
-  { id: "row_high_db", name: "Remo alto con mancuerna", group: "Espalda", equipment: "Mancuerna", primary: ["back", "rearDelt"], secondary: ["biceps", "traps"] }
+  { id: "row_high_db", name: "Remo alto con mancuerna", group: "Espalda", equipment: "Mancuerna", primary: ["back", "rearDelt"], secondary: ["biceps", "traps"] },
 
   // HOMBROS
   { id: "ohp", name: "Press militar (Barra)", group: "Hombros", equipment: "Barra", primary: ["frontDelt", "sideDelt"], secondary: ["triceps"] },
@@ -115,7 +115,7 @@ export const EXERCISES: Exercise[] = [
   { id: "add_mach", name: "Aductores en máquina", group: "Piernas", equipment: "Máquina", primary: ["quads"], secondary: [] },
   { id: "abd_mach", name: "Abductores en máquina", group: "Piernas", equipment: "Máquina", primary: ["glutes"], secondary: [] },
   { id: "calf_st", name: "Elevación gemelos de pie", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] },
-  { id: "calf_seat", name: "Elevación gemelos sentado", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] }
+  { id: "calf_seat", name: "Elevación gemelos sentado", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] },
 
 
   // ABDOMEN
