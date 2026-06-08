@@ -39,9 +39,11 @@ export const EXERCISES: Exercise[] = [
   { id: "pec", name: "Pec Deck", group: "Pecho", equipment: "Máquina", primary: ["chest"], secondary: [] },
   { id: "dip", name: "Fondos en paralelas", group: "Pecho", equipment: "Peso corporal", primary: ["chest", "triceps"], secondary: ["frontDelt"] },
   { id: "pec_fly", name: "Pec Fly", group: "Pecho", equipment: "Máquina", primary: ["chest"], secondary: [] },
+  { id: "fly_mach", name: "Aperturas (Máquina)", group: "Pecho", equipment: "Máquina", primary: ["chest"], secondary: [] },
 
 
   // ESPALDA
+  
   { id: "dl", name: "Peso muerto", group: "Espalda", equipment: "Barra", primary: ["lowerBack", "hamstrings", "glutes"], secondary: ["traps", "back"] },
   { id: "pull", name: "Dominadas", group: "Espalda", equipment: "Peso corporal", primary: ["lats", "back"], secondary: ["biceps"] },
   { id: "lat_pd", name: "Jalón al pecho", group: "Espalda", equipment: "Polea", primary: ["lats"], secondary: ["biceps", "back"] },
@@ -53,6 +55,9 @@ export const EXERCISES: Exercise[] = [
   { id: "shrug_bb", name: "Encogimientos (Barra)", group: "Espalda", equipment: "Barra", primary: ["traps"], secondary: [] },
   { id: "shrug_db", name: "Encogimientos (Mancuerna)", group: "Espalda", equipment: "Mancuerna", primary: ["traps"], secondary: [] },
   { id: "pullover", name: "Pullover", group: "Espalda", equipment: "Mancuerna", primary: ["lats"], secondary: ["chest"] },
+  { id: "rdl", name: "Peso muerto rumano", group: "Espalda", equipment: "Barra", primary: ["hamstrings", "glutes", "lowerBack"], secondary: ["back"] },
+  { id: "row_mach_low", name: "Remo en máquina bajo", group: "Espalda", equipment: "Máquina", primary: ["back", "lats"], secondary: ["biceps"] },
+  { id: "row_high_db", name: "Remo alto con mancuerna", group: "Espalda", equipment: "Mancuerna", primary: ["back", "rearDelt"], secondary: ["biceps", "traps"] }
 
   // HOMBROS
   { id: "ohp", name: "Press militar (Barra)", group: "Hombros", equipment: "Barra", primary: ["frontDelt", "sideDelt"], secondary: ["triceps"] },
@@ -86,19 +91,32 @@ export const EXERCISES: Exercise[] = [
   { id: "dip_b", name: "Fondos en banco", group: "Tríceps", equipment: "Peso corporal", primary: ["triceps"], secondary: ["frontDelt"] },
 
   // PIERNAS
+ 
   { id: "sq", name: "Sentadilla (Barra)", group: "Piernas", equipment: "Barra", primary: ["quads", "glutes"], secondary: ["hamstrings", "lowerBack"] },
   { id: "fsq", name: "Sentadilla frontal", group: "Piernas", equipment: "Barra", primary: ["quads"], secondary: ["glutes", "abs"] },
+  { id: "sq_smith", name: "Sentadilla (Multipower)", group: "Piernas", equipment: "Máquina", primary: ["quads", "glutes"], secondary: ["hamstrings"] },
+  { id: "hack_sq", name: "Sentadilla Hack", group: "Piernas", equipment: "Máquina", primary: ["quads"], secondary: ["glutes", "hamstrings"] },
+  { id: "gob_sq", name: "Sentadilla Goblet", group: "Piernas", equipment: "Mancuerna", primary: ["quads", "glutes"], secondary: [] },
   { id: "lp", name: "Prensa de piernas", group: "Piernas", equipment: "Máquina", primary: ["quads", "glutes"], secondary: ["hamstrings"] },
   { id: "lung_db", name: "Zancadas (Mancuerna)", group: "Piernas", equipment: "Mancuerna", primary: ["quads", "glutes"], secondary: ["hamstrings"] },
+  { id: "bsq", name: "Sentadilla búlgara", group: "Piernas", equipment: "Mancuerna", primary: ["quads", "glutes"], secondary: ["hamstrings"] },
+  { id: "bsq_smith", name: "Sentadilla búlgara (Multipower)", group: "Piernas", equipment: "Máquina", primary: ["quads", "glutes"], secondary: ["hamstrings"] },
+  { id: "step_up", name: "Subidas al cajón", group: "Piernas", equipment: "Mancuerna", primary: ["quads", "glutes"], secondary: [] },
   { id: "rdl", name: "Peso muerto rumano", group: "Piernas", equipment: "Barra", primary: ["hamstrings", "glutes"], secondary: ["lowerBack"] },
   { id: "rdl_db", name: "Peso muerto rumano (Mancuerna)", group: "Piernas", equipment: "Mancuerna", primary: ["hamstrings", "glutes"], secondary: ["lowerBack"] },
-  { id: "lc", name: "Curl femoral", group: "Piernas", equipment: "Máquina", primary: ["hamstrings"], secondary: [] },
-  { id: "le", name: "Extensión cuádriceps", group: "Piernas", equipment: "Máquina", primary: ["quads"], secondary: [] },
-  { id: "calf_st", name: "Elevación gemelos de pie", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] },
-  { id: "calf_seat", name: "Elevación gemelos sentado", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] },
-  { id: "hip", name: "Hip Thrust", group: "Piernas", equipment: "Barra", primary: ["glutes"], secondary: ["hamstrings"] },
-  { id: "bsq", name: "Sentadilla búlgara", group: "Piernas", equipment: "Mancuerna", primary: ["quads", "glutes"], secondary: ["hamstrings"] },
   { id: "good", name: "Good Morning", group: "Piernas", equipment: "Barra", primary: ["hamstrings", "lowerBack"], secondary: ["glutes"] },
+  { id: "le", name: "Extensión cuádriceps", group: "Piernas", equipment: "Máquina", primary: ["quads"], secondary: [] },
+  { id: "lc", name: "Curl femoral", group: "Piernas", equipment: "Máquina", primary: ["hamstrings"], secondary: [] },
+  { id: "lc_seat", name: "Curl femoral sentado", group: "Piernas", equipment: "Máquina", primary: ["hamstrings"], secondary: [] },
+  { id: "lc_lie", name: "Curl femoral tumbado", group: "Piernas", equipment: "Máquina", primary: ["hamstrings"], secondary: [] },
+  { id: "hip", name: "Hip Thrust", group: "Piernas", equipment: "Barra", primary: ["glutes"], secondary: ["hamstrings"] },
+  { id: "glute_kick_c", name: "Patada de glúteo en polea", group: "Piernas", equipment: "Polea", primary: ["glutes"], secondary: ["hamstrings"] },
+  { id: "glute_kick_m", name: "Patada de glúteo en máquina", group: "Piernas", equipment: "Máquina", primary: ["glutes"], secondary: ["hamstrings"] },
+  { id: "add_mach", name: "Aductores en máquina", group: "Piernas", equipment: "Máquina", primary: ["quads"], secondary: [] },
+  { id: "abd_mach", name: "Abductores en máquina", group: "Piernas", equipment: "Máquina", primary: ["glutes"], secondary: [] },
+  { id: "calf_st", name: "Elevación gemelos de pie", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] },
+  { id: "calf_seat", name: "Elevación gemelos sentado", group: "Piernas", equipment: "Máquina", primary: ["calves"], secondary: [] }
+
 
   // ABDOMEN
   { id: "cr_cb", name: "Crunch en polea", group: "Abdomen", equipment: "Polea", primary: ["abs"], secondary: [] },
