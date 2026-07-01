@@ -122,7 +122,7 @@ export default function RoutineEditor(props: Props) {
         notes: null,
         sets: [0, 1, 2].map((j) => ({
           position: j,
-          weight: last?.weight ?? null,
+          weight: null,
           reps: last?.reps ?? 10,
           rest_seconds: 90,
           set_type: "normal" as SetType,
@@ -146,7 +146,7 @@ export default function RoutineEditor(props: Props) {
         ...next[exIdx].sets,
         {
           position: next[exIdx].sets.length,
-          weight: last?.weight ?? null,
+          weight: null,
           reps: last?.reps ?? 10,
           rest_seconds: last?.rest_seconds ?? 90,
           set_type: last?.set_type ?? "normal",
@@ -224,13 +224,11 @@ export default function RoutineEditor(props: Props) {
       superset_group: null,
       sets: [0, 1, 2].map((j) => ({
         position: j,
-        weight: history[id]?.weight ?? null,
+        weight: null,
         reps: history[id]?.reps ?? 10,
         rest_seconds: 90,
         set_type: "normal" as SetType,
         done: false,
-        actual_weight: null,
-        actual_reps: null,
       })),
     }));
     void now;
@@ -257,8 +255,6 @@ export default function RoutineEditor(props: Props) {
       rest_seconds: last?.rest_seconds ?? 90,
       set_type: last?.set_type ?? "normal",
       done: false,
-      actual_weight: null,
-      actual_reps: null,
     };
     lp.onChange(
       lp.exercises.map((e, i) =>
@@ -279,7 +275,7 @@ export default function RoutineEditor(props: Props) {
   const liveUpdateSet = (
     exIdx: number,
     setIdx: number,
-    field: keyof Pick<LiveSet, "weight" | "reps" | "rest_seconds" | "actual_weight" | "actual_reps">,
+    field: keyof Pick<LiveSet, "weight" | "reps" | "rest_seconds">,
     value: string
   ) => {
     if (!lp) return;
@@ -452,9 +448,8 @@ export default function RoutineEditor(props: Props) {
                               </button>
                             </div>
 
-                            <div className="grid grid-cols-[28px_1fr_1fr_1fr_24px] gap-2 px-1 mb-1.5">
+                            <div className="grid grid-cols-[28px_1fr_1fr_24px] gap-2 px-1 mb-1.5">
                               <span className="text-[10px] uppercase tracking-wider text-neutral-400">Set</span>
-                              <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-center">kg</span>
                               <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-center">Reps</span>
                               <span className="text-[10px] uppercase tracking-wider text-neutral-400 text-center">Desc.</span>
                               <span />
@@ -463,16 +458,11 @@ export default function RoutineEditor(props: Props) {
                             {ex.sets.map((set, setIdx) => (
                               <div
                                 key={setIdx}
-                                className="grid grid-cols-[28px_1fr_1fr_1fr_24px] gap-2 items-center mb-1.5"
+                                className="grid grid-cols-[28px_1fr_1fr_24px] gap-2 items-center mb-1.5"
                               >
                                 <span className="text-[12px] tabular-nums text-neutral-500 text-center">
                                   {setIdx + 1}
                                 </span>
-                                <NumInput
-                                  value={set.weight ?? ""}
-                                  onChange={(v) => tmplUpdateSet(exIdx, setIdx, "weight", v)}
-                                  placeholder="—"
-                                />
                                 <NumInput
                                   value={set.reps ?? ""}
                                   onChange={(v) => tmplUpdateSet(exIdx, setIdx, "reps", v)}
@@ -603,13 +593,11 @@ export default function RoutineEditor(props: Props) {
                         </div>
 
                         {/* Live set grid header */}
-                        <div className="grid grid-cols-[20px_22px_1fr_1fr_1fr_1fr_40px_28px_18px] gap-1 px-0.5 mb-1">
+                        <div className="grid grid-cols-[20px_22px_1fr_1fr_40px_28px_18px] gap-1 px-0.5 mb-1">
                           <span className="text-[9px] uppercase tracking-wide text-neutral-400">#</span>
                           <span className="text-[9px] uppercase tracking-wide text-neutral-400">T</span>
                           <span className="text-[9px] uppercase tracking-wide text-neutral-400 text-center">kg</span>
                           <span className="text-[9px] uppercase tracking-wide text-neutral-400 text-center">rep</span>
-                          <span className="text-[9px] uppercase tracking-wide text-neutral-400 text-center">kg*</span>
-                          <span className="text-[9px] uppercase tracking-wide text-neutral-400 text-center">rep*</span>
                           <span className="text-[9px] uppercase tracking-wide text-neutral-400 text-center">s</span>
                           <span />
                           <span />
@@ -621,7 +609,7 @@ export default function RoutineEditor(props: Props) {
                           return (
                             <div
                               key={setIdx}
-                              className={`grid grid-cols-[20px_22px_1fr_1fr_1fr_1fr_40px_28px_18px] gap-1 items-center mb-1.5 py-0.5 rounded-lg transition ${
+                              className={`grid grid-cols-[20px_22px_1fr_1fr_40px_28px_18px] gap-1 items-center mb-1.5 py-0.5 rounded-lg transition ${
                                 set.done ? "bg-neutral-100" : ""
                               }`}
                             >
@@ -638,34 +626,18 @@ export default function RoutineEditor(props: Props) {
                                 {SET_TYPE_LABEL[set.set_type]}
                               </button>
 
-                              {/* Target kg */}
+                              {/* kg */}
                               <SmallNumInput
                                 value={set.weight ?? ""}
                                 onChange={(v) => liveUpdateSet(exIdx, setIdx, "weight", v)}
                                 placeholder="—"
                               />
 
-                              {/* Target reps */}
+                              {/* reps */}
                               <SmallNumInput
                                 value={set.reps ?? ""}
                                 onChange={(v) => liveUpdateSet(exIdx, setIdx, "reps", v)}
                                 placeholder="—"
-                              />
-
-                              {/* Actual kg */}
-                              <SmallNumInput
-                                value={set.actual_weight ?? ""}
-                                onChange={(v) => liveUpdateSet(exIdx, setIdx, "actual_weight", v)}
-                                placeholder={set.weight?.toString() ?? "—"}
-                                highlight
-                              />
-
-                              {/* Actual reps */}
-                              <SmallNumInput
-                                value={set.actual_reps ?? ""}
-                                onChange={(v) => liveUpdateSet(exIdx, setIdx, "actual_reps", v)}
-                                placeholder={set.reps?.toString() ?? "—"}
-                                highlight
                               />
 
                               {/* Rest seconds */}

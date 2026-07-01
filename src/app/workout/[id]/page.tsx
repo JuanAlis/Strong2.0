@@ -10,7 +10,6 @@ import {
   finishWorkout,
   saveWorkoutSet,
   saveRoutine,
-  getLastPerformance,
   getUserProfile,
   type Routine,
   type LiveExercise,
@@ -58,7 +57,7 @@ function liveToRoutineExercises(exs: LiveExercise[]): RoutineExercise[] {
     superset_group: ex.superset_group,
     sets: ex.sets.map((s, j) => ({
       position: j,
-      weight: s.weight,
+      weight: null,
       reps: s.reps,
       rest_seconds: s.rest_seconds,
       set_type: s.set_type,
@@ -198,9 +197,8 @@ export default function WorkoutPage() {
     if (initRef.current) return;
     initRef.current = true;
     (async () => {
-      const [r, hist, { data: authData }] = await Promise.all([
+      const [r, { data: authData }] = await Promise.all([
         getRoutine(id),
-        getLastPerformance(),
         supabase.auth.getUser(),
       ]);
       if (!r) return;
@@ -224,13 +222,11 @@ export default function WorkoutPage() {
           superset_group: e.superset_group ?? null,
           sets: e.sets.map((s) => ({
             position: s.position,
-            weight: s.weight,
+            weight: null,
             reps: s.reps,
             rest_seconds: s.rest_seconds || 90,
             set_type: s.set_type ?? "normal",
             done: false,
-            actual_weight: hist[e.exercise_id]?.weight ?? null,
-            actual_reps: s.reps,
           })),
         })),
       };
@@ -327,8 +323,8 @@ export default function WorkoutPage() {
           exerciseId: ex.exercise_id,
           position: ex.position,
           setPosition: s.position,
-          weight: s.actual_weight,
-          reps: s.actual_reps,
+          weight: s.weight,
+          reps: s.reps,
           done: s.done,
           setType: s.set_type,
         });

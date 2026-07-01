@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell, Calendar, User, Calculator } from "lucide-react";
+import { Dumbbell, Calendar, User, Calculator, TrendingUp } from "lucide-react";
 
 const tabs = [
   { href: "/profile", icon: User, label: "Perfil" },
   { href: "/history", icon: Calendar, label: "Historial" },
   { href: "/", icon: Dumbbell, label: "Entrenar" },
+  { href: "/progress", icon: TrendingUp, label: "Progreso" },
   { href: "/calculator", icon: Calculator, label: "Calc." },
 ] as const;
 

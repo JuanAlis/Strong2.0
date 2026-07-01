@@ -34,8 +34,6 @@ export interface LiveSet {
   rest_seconds: number;
   set_type: SetType;
   done: boolean;
-  actual_weight: number | null;
-  actual_reps: number | null;
 }
 
 export interface LiveExercise {
@@ -232,6 +230,40 @@ export async function deleteRoutine(id: string) {
   if (error) throw error;
 }
 
+// ---------- WEEKLY SCHEDULE ----------
+// Plan semanal: día (0=Lunes … 6=Domingo) → lista ordenada de routine_id.
+// Una rutina puede aparecer en varios días.
+export async function getSchedule(): Promise<Record<number, string[]>> {
+  const { data, error } = await supabase
+    .from("routine_schedule")
+    .select("routine_id, day_of_week, position")
+    .order("day_of_week", { ascending: true })
+    .order("position", { ascending: true });
+  if (error) throw error;
+  const plan: Record<number, string[]> = {};
+  (data || []).forEach((r: { routine_id: string; day_of_week: number }) => {
+    (plan[r.day_of_week] ||= []).push(r.routine_id);
+  });
+  return plan;
+}
+
+// Reemplaza el plan completo del usuario (borra + inserta). Simple y atómico
+// para un plan de pocas decenas de filas.
+export async function saveSchedule(
+  entries: { routine_id: string; day_of_week: number; position: number }[]
+): Promise<void> {
+  const userId = await currentUserId();
+  const { error: delErr } = await supabase
+    .from("routine_schedule")
+    .delete()
+    .eq("user_id", userId);
+  if (delErr) throw delErr;
+  if (entries.length === 0) return;
+  const rows = entries.map((e) => ({ ...e, user_id: userId }));
+  const { error } = await supabase.from("routine_schedule").insert(rows);
+  if (error) throw error;
+}
+
 // ---------- WORKOUTS ----------
 export async function startWorkout(routineId: string, routineName: string): Promise<string> {
   const userId = await currentUserId();
@@ -366,6 +398,62 @@ export async function getLastPerformance(): Promise<Record<string, { weight: num
     map[row.exercise_id] = { weight: row.last_weight, reps: row.last_reps };
   });
   return map;
+}
+
+// ---------- PROGRESS ----------
+export interface ProgressPoint {
+  date: string;        // finished_at ISO of the workout
+  maxWeight: number;   // heaviest set that day
+  maxReps: number;     // most reps in a single set
+  volume: number;      // Σ (peso × reps) de las series hechas
+  bestReps: number;    // reps de la serie más pesada
+}
+
+// Serie temporal de progresión por exercise_id, agregada por entrenamiento terminado.
+export async function getProgress(): Promise<Record<string, ProgressPoint[]>> {
+  const [workoutsRes, setsRes] = await Promise.all([
+    supabase
+      .from("workouts")
+      .select("id, finished_at")
+      .not("finished_at", "is", null)
+      .order("finished_at", { ascending: true }),
+    supabase
+      .from("workout_sets")
+      .select("workout_id, exercise_id, weight, reps, done")
+      .eq("done", true),
+  ]);
+  if (workoutsRes.error) throw workoutsRes.error;
+  if (setsRes.error) throw setsRes.error;
+
+  const workoutDate: Record<string, string> = {};
+  (workoutsRes.data || []).forEach((w: any) => {
+    workoutDate[w.id] = w.finished_at;
+  });
+
+  type Agg = { maxWeight: number; maxReps: number; volume: number; bestReps: number };
+  const byExercise: Record<string, Record<string, Agg>> = {};
+
+  (setsRes.data || []).forEach((s: any) => {
+    if (!workoutDate[s.workout_id]) return; // solo entrenamientos terminados
+    const w = s.weight ?? 0;
+    const r = s.reps ?? 0;
+    const ex = (byExercise[s.exercise_id] ||= {});
+    const agg = (ex[s.workout_id] ||= { maxWeight: 0, maxReps: 0, volume: 0, bestReps: 0 });
+    agg.volume += w * r;
+    if (r > agg.maxReps) agg.maxReps = r;
+    if (w > agg.maxWeight) {
+      agg.maxWeight = w;
+      agg.bestReps = r;
+    }
+  });
+
+  const result: Record<string, ProgressPoint[]> = {};
+  Object.entries(byExercise).forEach(([exId, workouts]) => {
+    result[exId] = Object.entries(workouts)
+      .map(([wid, agg]) => ({ date: workoutDate[wid], ...agg }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  });
+  return result;
 }
 
 // ---------- BODY WEIGHT ----------
