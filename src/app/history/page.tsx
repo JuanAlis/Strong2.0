@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { listWorkouts, type WorkoutSummary } from "@/lib/db";
 import BottomNav from "@/components/BottomNav";
+import SetsBreakdown from "@/components/SetsBreakdown";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", {
@@ -66,13 +67,12 @@ export default function HistoryPage() {
                   </p>
                   <ChevronRight size={16} strokeWidth={1.5} className="text-neutral-300 mt-0.5" />
                 </div>
-                <div className="flex items-center gap-2 text-[11px] text-neutral-500 flex-wrap">
+                <div className="flex items-center gap-2 text-[11px] text-neutral-500 flex-wrap mb-2.5">
                   <span>{formatDate(w.started_at)}</span>
                   <span className="text-neutral-300">·</span>
                   <span>{formatDuration(w.duration_seconds)}</span>
-                  <span className="text-neutral-300">·</span>
-                  <span className="tabular-nums">{w.completed_sets} series completadas</span>
                 </div>
+                <SetsBreakdown total={w.completed_sets} groups={w.groupCounts} />
               </Link>
             ))}
           </div>

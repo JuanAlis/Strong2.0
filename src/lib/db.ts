@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getExercise } from "@/data/exercises";
 
 // ---------- TYPES ----------
 export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
@@ -51,6 +52,11 @@ export interface LiveWorkout {
   exercises: LiveExercise[];
 }
 
+export interface GroupCount {
+  group: string; // grupo muscular (Pecho, Espalda, …)
+  count: number; // series hechas de ese grupo
+}
+
 export interface WorkoutSummary {
   id: string;
   routine_name: string | null;
@@ -58,6 +64,7 @@ export interface WorkoutSummary {
   finished_at: string | null;
   duration_seconds: number | null;
   completed_sets: number;
+  groupCounts: GroupCount[]; // desglose de series hechas por grupo muscular
 }
 
 export interface WorkoutDetail extends WorkoutSummary {
@@ -328,14 +335,17 @@ export async function listWorkouts(): Promise<WorkoutSummary[]> {
       .select("id, routine_name, started_at, finished_at, duration_seconds")
       .not("finished_at", "is", null)
       .order("started_at", { ascending: false }),
-    supabase.from("workout_sets").select("workout_id").eq("done", true),
+    supabase.from("workout_sets").select("workout_id, exercise_id").eq("done", true),
   ]);
 
   if (workoutsRes.error) throw workoutsRes.error;
 
   const countMap: Record<string, number> = {};
-  (setsRes.data || []).forEach((r: { workout_id: string }) => {
+  const groupMap: Record<string, Record<string, number>> = {};
+  (setsRes.data || []).forEach((r: { workout_id: string; exercise_id: string }) => {
     countMap[r.workout_id] = (countMap[r.workout_id] ?? 0) + 1;
+    const g = getExercise(r.exercise_id)?.group ?? "Otro";
+    (groupMap[r.workout_id] ||= {})[g] = (groupMap[r.workout_id][g] ?? 0) + 1;
   });
 
   return (workoutsRes.data || []).map((w: any) => ({
@@ -345,6 +355,9 @@ export async function listWorkouts(): Promise<WorkoutSummary[]> {
     finished_at: w.finished_at,
     duration_seconds: w.duration_seconds,
     completed_sets: countMap[w.id] ?? 0,
+    groupCounts: Object.entries(groupMap[w.id] ?? {})
+      .map(([group, count]) => ({ group, count }))
+      .sort((a, b) => b.count - a.count),
   }));
 }
 
@@ -365,7 +378,17 @@ export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetail
 
   if (workoutRes.error) return null;
   const w = workoutRes.data;
-  const completedSets = (setsRes.data || []).filter((s: any) => s.done).length;
+  const doneSets = (setsRes.data || []).filter((s: any) => s.done);
+  const completedSets = doneSets.length;
+
+  const groupMap: Record<string, number> = {};
+  doneSets.forEach((s: any) => {
+    const g = getExercise(s.exercise_id)?.group ?? "Otro";
+    groupMap[g] = (groupMap[g] ?? 0) + 1;
+  });
+  const groupCounts = Object.entries(groupMap)
+    .map(([group, count]) => ({ group, count }))
+    .sort((a, b) => b.count - a.count);
 
   return {
     id: w.id,
@@ -374,6 +397,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetail
     finished_at: w.finished_at,
     duration_seconds: w.duration_seconds,
     completed_sets: completedSets,
+    groupCounts,
     sets: (setsRes.data || []).map((s: any) => ({
       id: s.id,
       exercise_id: s.exercise_id,

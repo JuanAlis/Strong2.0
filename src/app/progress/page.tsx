@@ -23,16 +23,15 @@ import { getExercise } from "@/data/exercises";
 import AnatomyModel from "@/components/AnatomyModel";
 import BottomNav from "@/components/BottomNav";
 
-// ---- Metric config ----
+// ---- Config ----
 type MetricKey = "maxWeight" | "maxReps" | "volume";
 
-const METRICS: { key: MetricKey; label: string; unit: string }[] = [
-  { key: "maxWeight", label: "Peso máx", unit: "kg" },
-  { key: "maxReps", label: "Reps máx", unit: "" },
-  { key: "volume", label: "Volumen", unit: "kg" },
+const METRICS: { key: MetricKey; label: string; unit: string; help: string }[] = [
+  { key: "maxWeight", label: "Peso máx", unit: "kg", help: "La serie más pesada de cada entrenamiento." },
+  { key: "maxReps", label: "Reps máx", unit: "", help: "Las repeticiones de tu mejor serie." },
+  { key: "volume", label: "Volumen", unit: "kg", help: "Carga total del día: suma de peso × reps." },
 ];
 
-// ---- Time range config ----
 type RangeKey = "1m" | "3m" | "all";
 
 const RANGES: { key: RangeKey; label: string; days: number | null }[] = [
@@ -43,6 +42,7 @@ const RANGES: { key: RangeKey; label: string; days: number | null }[] = [
 
 const DAY_MS = 86400000;
 
+// ---- Helpers ----
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
@@ -52,6 +52,10 @@ function fmt(v: number, unit: string) {
   return unit ? `${n} ${unit}` : `${n}`;
 }
 
+function kg(v: number) {
+  return `${Math.round(v).toLocaleString("es-ES")} kg`;
+}
+
 // Lunes de la semana de una fecha (YYYY-MM-DD) para agrupar por semana.
 function weekStart(iso: string): string {
   const d = new Date(iso);
@@ -59,6 +63,33 @@ function weekStart(iso: string): string {
   d.setDate(d.getDate() - day);
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
+}
+
+// ---- Segmented control (reutilizable) ----
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { key: T; label: string }[];
+  value: T;
+  onChange: (k: T) => void;
+}) {
+  return (
+    <div className="flex bg-neutral-100 rounded-xl p-1">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`flex-1 py-2 rounded-lg text-[12px] transition ${
+            o.key === value ? "bg-white text-black font-medium shadow-sm" : "text-neutral-500"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ---- Exercise progression card ----
@@ -93,42 +124,52 @@ function ExerciseCard({
 
   return (
     <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 mb-2.5">
-      <div className="flex items-start gap-3">
+      {/* Identity row */}
+      <div className="flex items-center gap-3 mb-3">
         <div className="w-9 h-11 flex items-center justify-center flex-shrink-0">
           <AnatomyModel primary={meta.primary} secondary={meta.secondary} view="front" size={26} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-medium text-black leading-tight">{meta.name}</p>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-[11px] text-neutral-400">{meta.equipment}</span>
-            {pr.w > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-black bg-neutral-100 rounded-full px-1.5 py-0.5 tabular-nums">
-                <Trophy size={10} strokeWidth={2} />
-                PR {fmt(pr.w, "kg")}
-                {pr.r > 0 ? ` × ${pr.r}` : ""}
-              </span>
-            )}
-          </div>
+          <p className="text-[14px] font-medium text-black leading-tight truncate">{meta.name}</p>
+          <p className="text-[11px] text-neutral-400 mt-0.5">{meta.equipment}</p>
         </div>
-        <div className="text-right flex-shrink-0">
-          <p className="font-display text-[22px] leading-none text-black tabular-nums">
-            {hasData ? fmt(last, metric.unit) : "—"}
-          </p>
-          {enough && (
-            <div className="flex items-center justify-end gap-1 mt-1 text-[11px] text-neutral-500 tabular-nums">
-              <DeltaIcon size={12} strokeWidth={2} />
-              <span>
-                {delta > 0 ? "+" : ""}
-                {fmt(delta, metric.unit)}
-              </span>
-            </div>
-          )}
-        </div>
+        {pr.w > 0 && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-black bg-neutral-100 rounded-full px-2 py-1 tabular-nums flex-shrink-0">
+            <Trophy size={11} strokeWidth={2} />
+            {fmt(pr.w, "kg")}
+            {pr.r > 0 ? ` × ${pr.r}` : ""}
+          </span>
+        )}
       </div>
 
+      {/* Metric value + delta */}
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-neutral-400">{metric.label}</p>
+          <p className="font-display text-[26px] leading-none text-black tabular-nums mt-0.5">
+            {hasData ? fmt(last, metric.unit) : "—"}
+          </p>
+        </div>
+        {enough && (
+          <div
+            className={`flex items-center gap-1 text-[11px] tabular-nums mb-0.5 ${
+              delta > 0 ? "text-black" : delta < 0 ? "text-neutral-500" : "text-neutral-400"
+            }`}
+          >
+            <DeltaIcon size={13} strokeWidth={2} />
+            <span className="font-medium">
+              {delta > 0 ? "+" : ""}
+              {fmt(delta, metric.unit)}
+            </span>
+            <span className="text-neutral-400">vs inicio</span>
+          </div>
+        )}
+      </div>
+
+      {/* Sparkline */}
       {enough ? (
-        <div className="mt-3 -mx-1">
-          <ResponsiveContainer width="100%" height={96}>
+        <div className="mt-2 -mx-1">
+          <ResponsiveContainer width="100%" height={84}>
             <LineChart data={series} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
               <XAxis
                 dataKey="date"
@@ -165,10 +206,10 @@ function ExerciseCard({
           </ResponsiveContainer>
         </div>
       ) : (
-        <p className="mt-3 text-[11px] text-neutral-400">
+        <p className="mt-2 text-[11px] text-neutral-400">
           {hasData
-            ? "Necesitas otro entrenamiento en este rango para ver la tendencia."
-            : "Aún sin registros en este rango."}
+            ? "Un entrenamiento más y verás la tendencia."
+            : "Sin registros en este periodo."}
         </p>
       )}
     </div>
@@ -236,7 +277,7 @@ export default function ProgressPage() {
     const weekly = Object.entries(volumeByWeek)
       .map(([week, vol]) => ({ week, label: shortDate(week), value: Math.round(vol) }))
       .sort((a, b) => new Date(a.week).getTime() - new Date(b.week).getTime());
-    return { weekly, sessions: sessions.size, totalVolume: Math.round(totalVolume) };
+    return { weekly, sessions: sessions.size, totalVolume };
   }, [exerciseIds, progress, inRange]);
 
   const anyData = summary.sessions > 0;
@@ -271,7 +312,7 @@ export default function ProgressPage() {
       ) : (
         <>
           {/* Routine selector */}
-          <div className="scroll-area overflow-x-auto px-7 pb-2 flex-shrink-0">
+          <div className="scroll-area overflow-x-auto px-7 pb-3 flex-shrink-0">
             <div className="flex gap-2 w-max">
               {routines.map((r) => {
                 const active = r.id === selectedId;
@@ -292,54 +333,43 @@ export default function ProgressPage() {
             </div>
           </div>
 
-          {/* Time range control */}
-          <div className="px-7 pb-3 flex-shrink-0 flex gap-2">
-            {RANGES.map((r) => {
-              const active = r.key === rangeKey;
-              return (
-                <button
-                  key={r.key}
-                  onClick={() => setRangeKey(r.key)}
-                  className={`text-[11px] px-3 py-1.5 rounded-full transition ${
-                    active
-                      ? "bg-neutral-900 text-white"
-                      : "bg-neutral-100 text-neutral-500 active:bg-neutral-200"
-                  }`}
-                >
-                  {r.label}
-                </button>
-              );
-            })}
+          {/* Time range */}
+          <div className="px-7 pb-3 flex-shrink-0">
+            <Segmented
+              options={RANGES.map((r) => ({ key: r.key, label: r.label }))}
+              value={rangeKey}
+              onChange={setRangeKey}
+            />
           </div>
 
           <div className="flex-1 overflow-y-auto scroll-area px-7 pb-28">
             {!anyData ? (
               <div className="border border-dashed border-neutral-300 rounded-2xl py-10 px-6 text-center">
                 <p className="text-[13px] text-neutral-600 leading-relaxed">
-                  No hay entrenamientos de esta rutina en este rango.
+                  No hay entrenamientos de esta rutina en este periodo.
                 </p>
               </div>
             ) : (
               <>
-                {/* Weekly volume summary */}
-                <div className="bg-neutral-900 text-white rounded-2xl p-4 mb-4">
-                  <div className="flex items-start justify-between mb-3">
+                {/* Hero summary */}
+                <div className="bg-neutral-900 text-white rounded-2xl p-5 mb-6">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-white/50">Volumen total</p>
-                      <p className="font-display text-[26px] leading-none tabular-nums mt-1">
-                        {summary.totalVolume.toLocaleString("es-ES")} kg
+                      <p className="font-display text-[28px] leading-none tabular-nums mt-1.5">
+                        {kg(summary.totalVolume)}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div>
                       <p className="text-[10px] uppercase tracking-wider text-white/50">Sesiones</p>
-                      <p className="font-display text-[26px] leading-none tabular-nums mt-1">
+                      <p className="font-display text-[28px] leading-none tabular-nums mt-1.5">
                         {summary.sessions}
                       </p>
                     </div>
                   </div>
                   {summary.weekly.length >= 2 && (
-                    <div className="-mx-1">
-                      <p className="text-[10px] uppercase tracking-wider text-white/50 mb-1 px-1">
+                    <div className="-mx-1 pt-1">
+                      <p className="text-[10px] uppercase tracking-wider text-white/50 mb-2 px-1">
                         Volumen por semana
                       </p>
                       <ResponsiveContainer width="100%" height={80}>
@@ -360,7 +390,7 @@ export default function ProgressPage() {
                               fontSize: 12,
                             }}
                             labelStyle={{ color: "#a3a3a3" }}
-                            formatter={(v: any) => [`${Number(v).toLocaleString("es-ES")} kg`, "Volumen"]}
+                            formatter={(v: any) => [kg(Number(v)), "Volumen"]}
                           />
                           <Bar dataKey="value" fill="#ffffff" radius={[3, 3, 0, 0]} />
                         </BarChart>
@@ -369,25 +399,23 @@ export default function ProgressPage() {
                   )}
                 </div>
 
-                {/* Metric segmented control */}
-                <div className="flex bg-neutral-100 rounded-xl p-1 mb-3">
-                  {METRICS.map((m) => {
-                    const active = m.key === metricKey;
-                    return (
-                      <button
-                        key={m.key}
-                        onClick={() => setMetricKey(m.key)}
-                        className={`flex-1 py-2 rounded-lg text-[12px] transition ${
-                          active ? "bg-white text-black font-medium shadow-sm" : "text-neutral-500"
-                        }`}
-                      >
-                        {m.label}
-                      </button>
-                    );
-                  })}
+                {/* Per-exercise section */}
+                <div className="flex items-baseline justify-between mb-2">
+                  <h2 className="text-[12px] font-semibold uppercase tracking-[0.15em] text-black">
+                    Por ejercicio
+                  </h2>
+                  <span className="text-[11px] text-neutral-400 tabular-nums">
+                    {exerciseIds.length}
+                  </span>
                 </div>
 
-                {/* Exercise cards */}
+                <Segmented
+                  options={METRICS.map((m) => ({ key: m.key, label: m.label }))}
+                  value={metricKey}
+                  onChange={setMetricKey}
+                />
+                <p className="text-[11px] text-neutral-400 mt-1.5 mb-3 px-0.5">{metric.help}</p>
+
                 {exerciseIds.map((id) => (
                   <ExerciseCard
                     key={id}

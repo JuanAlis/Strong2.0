@@ -7,6 +7,7 @@ import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import { getWorkoutDetail, deleteWorkout, type WorkoutDetail } from "@/lib/db";
 import { getExercise } from "@/data/exercises";
 import AnatomyModel from "@/components/AnatomyModel";
+import SetsBreakdown from "@/components/SetsBreakdown";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", {
@@ -108,11 +109,10 @@ export default function WorkoutDetailPage() {
         <h1 className="font-display text-[32px] leading-tight font-light text-black">
           {workout.routine_name ?? "Entrenamiento"}
         </h1>
-        <div className="flex items-center gap-3 mt-2 text-[11px] text-neutral-500">
+        <div className="flex items-center gap-3 mt-2 mb-3 text-[11px] text-neutral-500">
           <span>{formatDuration(workout.duration_seconds)}</span>
-          <span className="text-neutral-300">·</span>
-          <span className="tabular-nums">{workout.completed_sets} series completadas</span>
         </div>
+        <SetsBreakdown total={workout.completed_sets} groups={workout.groupCounts} />
       </div>
 
       <div className="flex-1 overflow-y-auto scroll-area px-7 pb-12">
