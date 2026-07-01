@@ -73,6 +73,7 @@ export interface WorkoutSetRow {
   reps: number | null;
   done: boolean;
   set_type?: SetType;
+  notes?: string | null;
 }
 
 export interface BodyWeightEntry {
@@ -298,6 +299,7 @@ export async function saveWorkoutSet(payload: {
   reps: number | null;
   done: boolean;
   setType?: SetType;
+  notes?: string | null;
 }) {
   const { error } = await supabase.from("workout_sets").insert({
     workout_id: payload.workoutId,
@@ -308,6 +310,7 @@ export async function saveWorkoutSet(payload: {
     reps: payload.reps,
     done: payload.done,
     set_type: payload.setType ?? 'normal',
+    notes: payload.notes ?? null,
   });
   if (error) throw error;
 }
@@ -354,7 +357,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetail
       .single(),
     supabase
       .from("workout_sets")
-      .select("id, exercise_id, position, set_position, weight, reps, done, set_type")
+      .select("id, exercise_id, position, set_position, weight, reps, done, set_type, notes")
       .eq("workout_id", workoutId)
       .order("position")
       .order("set_position"),
@@ -380,6 +383,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<WorkoutDetail
       reps: s.reps,
       done: s.done,
       set_type: (s.set_type as SetType) ?? 'normal',
+      notes: s.notes ?? null,
     })),
   };
 }

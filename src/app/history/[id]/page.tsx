@@ -119,6 +119,7 @@ export default function WorkoutDetailPage() {
         {exerciseIds.map((exId) => {
           const meta = getExercise(exId);
           const exSets = byExercise[exId];
+          const note = exSets.find((s) => s.notes)?.notes ?? null;
           return (
             <div key={exId} className="mb-6">
               <div className="flex items-center gap-3 mb-2">
@@ -129,6 +130,12 @@ export default function WorkoutDetailPage() {
                 )}
                 <p className="text-[14px] font-medium text-black">{meta?.name ?? exId}</p>
               </div>
+
+              {note && (
+                <p className="text-[11px] text-neutral-500 italic mb-2 leading-snug border-l-2 border-neutral-200 pl-2">
+                  {note}
+                </p>
+              )}
 
               <div className="grid grid-cols-[28px_1fr_1fr_1fr] gap-2 px-1 mb-1">
                 <span className="text-[10px] uppercase tracking-wider text-neutral-400">Set</span>

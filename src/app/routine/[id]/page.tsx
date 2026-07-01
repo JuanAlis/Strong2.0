@@ -94,7 +94,7 @@ export default function RoutinePreviewPage() {
           const ex = getExercise(e.exercise_id);
           if (!ex) return null;
           return (
-            <div key={i} className="flex items-center gap-3 py-2.5 border-b border-neutral-100">
+            <div key={i} className="flex items-start gap-3 py-2.5 border-b border-neutral-100">
               <div className="w-10 h-12 flex items-center justify-center flex-shrink-0">
                 <AnatomyModel primary={ex.primary} secondary={ex.secondary} view="front" size={28} />
               </div>
@@ -103,6 +103,11 @@ export default function RoutinePreviewPage() {
                 <p className="text-[11px] text-neutral-400 mt-0.5">
                   {e.sets.length} series · {ex.equipment}
                 </p>
+                {e.notes && (
+                  <p className="text-[11px] text-neutral-500 italic mt-1.5 leading-snug border-l-2 border-neutral-200 pl-2">
+                    {e.notes}
+                  </p>
+                )}
               </div>
             </div>
           );

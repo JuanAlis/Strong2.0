@@ -327,6 +327,7 @@ export default function WorkoutPage() {
           reps: s.reps,
           done: s.done,
           setType: s.set_type,
+          notes: ex.notes,
         });
       }
     }
